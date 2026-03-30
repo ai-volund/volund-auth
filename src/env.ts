@@ -16,6 +16,11 @@ export const env = {
   authBaseUrl: process.env.AUTH_BASE_URL || "http://localhost:3456",
   jwtIssuer: process.env.JWT_ISSUER || "volund",
   // OIDC providers — JSON array of GenericOAuthConfig objects
-  // Example: [{"providerId":"google","clientId":"...","clientSecret":"...","discoveryUrl":"https://accounts.google.com/.well-known/openid-configuration"}]
   oidcProviders: process.env.OIDC_PROVIDERS || "[]",
+  // SMTP config for email verification + password reset
+  smtpHost: process.env.SMTP_HOST || "",
+  smtpPort: parseInt(process.env.SMTP_PORT || "587", 10),
+  smtpUser: process.env.SMTP_USER || "",
+  smtpPass: process.env.SMTP_PASS || "",
+  smtpFrom: process.env.SMTP_FROM || "noreply@volund.ai",
 } as const;

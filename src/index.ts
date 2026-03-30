@@ -28,14 +28,21 @@ app.use(
 async function autoMigrate() {
   console.log("Running auto-migration...");
 
-  // Trigger better-auth table creation by making a lightweight API call.
-  // better-auth uses Kysely and auto-creates tables on first request if they
-  // don't exist (when using the built-in database adapter).
+  // Trigger table creation by attempting a sign-up.
+  // better-auth's Kysely adapter auto-creates tables on first write operation.
   try {
-    await auth.api.getSession({ headers: new Headers() });
+    await auth.api.signUpEmail({
+      body: { email: `migrate-${Date.now()}@init.local`, password: "migration-init-00", name: "init" },
+    });
   } catch {
-    // Expected to fail (no session) — but tables get created as a side effect.
+    // Table creation happens as side effect even if sign-up fails for other reasons.
   }
+  // Clean up the dummy user.
+  try {
+    await pool.query(`DELETE FROM account WHERE "userId" IN (SELECT id FROM "user" WHERE email LIKE '%@init.local')`);
+    await pool.query(`DELETE FROM session WHERE "userId" IN (SELECT id FROM "user" WHERE email LIKE '%@init.local')`);
+    await pool.query(`DELETE FROM "user" WHERE email LIKE '%@init.local'`);
+  } catch { /* tables might not exist yet if adapter doesn't auto-create */ }
   console.log("better-auth tables ready");
 
   // Ensure the ba_user_map bridge table exists.

@@ -28,21 +28,65 @@ app.use(
 async function autoMigrate() {
   console.log("Running auto-migration...");
 
-  // Trigger table creation by attempting a sign-up.
-  // better-auth's Kysely adapter auto-creates tables on first write operation.
-  try {
-    await auth.api.signUpEmail({
-      body: { email: `migrate-${Date.now()}@init.local`, password: "migration-init-00", name: "init" },
-    });
-  } catch {
-    // Table creation happens as side effect even if sign-up fails for other reasons.
-  }
-  // Clean up the dummy user.
-  try {
-    await pool.query(`DELETE FROM account WHERE "userId" IN (SELECT id FROM "user" WHERE email LIKE '%@init.local')`);
-    await pool.query(`DELETE FROM session WHERE "userId" IN (SELECT id FROM "user" WHERE email LIKE '%@init.local')`);
-    await pool.query(`DELETE FROM "user" WHERE email LIKE '%@init.local'`);
-  } catch { /* tables might not exist yet if adapter doesn't auto-create */ }
+  // Create better-auth tables directly via SQL if they don't exist.
+  // This mirrors what `npx @better-auth/cli migrate` does.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS "user" (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      email TEXT NOT NULL UNIQUE,
+      "emailVerified" BOOLEAN NOT NULL DEFAULT false,
+      image TEXT,
+      "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      role TEXT DEFAULT 'user',
+      banned BOOLEAN DEFAULT false,
+      "banReason" TEXT,
+      "banExpires" TIMESTAMPTZ,
+      "displayName" TEXT DEFAULT ''
+    );
+    CREATE TABLE IF NOT EXISTS session (
+      id TEXT PRIMARY KEY,
+      "expiresAt" TIMESTAMPTZ NOT NULL,
+      token TEXT NOT NULL UNIQUE,
+      "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      "ipAddress" TEXT,
+      "userAgent" TEXT,
+      "userId" TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+      "impersonatedBy" TEXT
+    );
+    CREATE TABLE IF NOT EXISTS account (
+      id TEXT PRIMARY KEY,
+      "accountId" TEXT NOT NULL,
+      "providerId" TEXT NOT NULL,
+      "userId" TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+      "accessToken" TEXT,
+      "refreshToken" TEXT,
+      "idToken" TEXT,
+      "accessTokenExpiresAt" TIMESTAMPTZ,
+      "refreshTokenExpiresAt" TIMESTAMPTZ,
+      scope TEXT,
+      password TEXT,
+      "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS verification (
+      id TEXT PRIMARY KEY,
+      identifier TEXT NOT NULL,
+      value TEXT NOT NULL,
+      "expiresAt" TIMESTAMPTZ NOT NULL,
+      "createdAt" TIMESTAMPTZ DEFAULT NOW(),
+      "updatedAt" TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS jwks (
+      id TEXT PRIMARY KEY,
+      "publicKey" TEXT NOT NULL,
+      "privateKey" TEXT NOT NULL,
+      "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      "expiresAt" TIMESTAMPTZ
+    );
+  `);
   console.log("better-auth tables ready");
 
   // Ensure the ba_user_map bridge table exists.

@@ -30,6 +30,8 @@ spec:
               value: "http://localhost:5173,http://localhost:5174,http://localhost:8080,http://localhost:3456"
             - name: JWT_ISSUER
               value: "volund"
+            - name: BETTER_AUTH_SECRET
+              value: "volund-dev-secret-change-me-in-production"
           readinessProbe:
             httpGet:
               path: /healthz

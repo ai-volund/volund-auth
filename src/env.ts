@@ -2,6 +2,10 @@ import "dotenv/config";
 
 export const env = {
   port: parseInt(process.env.PORT || "3456", 10),
+  secret:
+    process.env.BETTER_AUTH_SECRET ||
+    process.env.JWT_SECRET ||
+    "volund-dev-secret-change-me-in-production",
   databaseUrl:
     process.env.DATABASE_URL ||
     "postgres://volund:volund@localhost:5432/volund?sslmode=disable",

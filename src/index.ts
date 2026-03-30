@@ -4,6 +4,7 @@ import { logger } from "hono/logger";
 import { serve } from "@hono/node-server";
 import { auth } from "./auth.js";
 import { env } from "./env.js";
+import { pool } from "./db.js";
 
 const app = new Hono();
 
@@ -30,6 +31,38 @@ app.get("/healthz", (c) => c.json({ status: "ok" }));
 
 app.on(["POST", "GET"], "/api/auth/**", (c) => {
   return auth.handler(c.req.raw);
+});
+
+// ── Custom: list tenant memberships for the current user ──────────────────────
+
+app.get("/api/user/tenants", async (c) => {
+  // Get session from better-auth
+  const session = await auth.api.getSession({
+    headers: c.req.raw.headers,
+  });
+  if (!session?.user) {
+    return c.json({ error: "not authenticated" }, 401);
+  }
+
+  const result = await pool.query(
+    `SELECT t.id, t.name, t.slug, t.plan, om.role
+     FROM ba_user_map m
+     JOIN org_members om ON om.user_id = m.volund_user_id
+     JOIN tenants t ON t.id = om.tenant_id
+     WHERE m.ba_user_id = $1
+     ORDER BY om.joined_at`,
+    [session.user.id]
+  );
+
+  return c.json({
+    tenants: result.rows.map((r: Record<string, unknown>) => ({
+      id: r.id,
+      name: r.name,
+      slug: r.slug,
+      plan: r.plan,
+      role: r.role,
+    })),
+  });
 });
 
 // ── Start server ──────────────────────────────────────────────────────────────

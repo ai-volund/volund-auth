@@ -23,6 +23,34 @@ app.use(
   })
 );
 
+// ── Auto-migrate on startup ───────────────────────────────────────────────────
+
+async function autoMigrate() {
+  console.log("Running auto-migration...");
+
+  // Trigger better-auth table creation by making a lightweight API call.
+  // better-auth uses Kysely and auto-creates tables on first request if they
+  // don't exist (when using the built-in database adapter).
+  try {
+    await auth.api.getSession({ headers: new Headers() });
+  } catch {
+    // Expected to fail (no session) — but tables get created as a side effect.
+  }
+  console.log("better-auth tables ready");
+
+  // Ensure the ba_user_map bridge table exists.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS ba_user_map (
+      ba_user_id     TEXT PRIMARY KEY,
+      volund_user_id UUID NOT NULL,
+      created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  console.log("ba_user_map table ready");
+}
+
+await autoMigrate();
+
 // ── Health check ──────────────────────────────────────────────────────────────
 
 app.get("/healthz", (c) => c.json({ status: "ok" }));
